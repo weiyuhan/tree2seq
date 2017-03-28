@@ -9,6 +9,7 @@ local Tree = torch.class('treelstm.Tree')
 function Tree:__init()
   self.parent = nil
   self.num_children = 0
+  self.value = 0
   self.children = {}
 end
 
