@@ -22,19 +22,8 @@ Training script for sentiment classification on the SST dataset.
 ]]
 
 local model_name, model_class, model_structure
-if args.model == 'constituency' then
-  model_name = 'Constituency Tree LSTM'
-  model_class = treelstm.TreeLSTMSentiment
-elseif args.model == 'dependency' then
-  model_name = 'Dependency Tree LSTM'
-  model_class = treelstm.TreeLSTMSentiment
-elseif args.model == 'lstm' then
-  model_name = 'LSTM'
-  model_class = treelstm.LSTMSentiment
-elseif args.model == 'bilstm' then
-  model_name = 'Bidirectional LSTM'
-  model_class = treelstm.LSTMSentiment
-end
+model_name = 'Dependency Tree LSTM'
+model_class = treelstm.TreeLSTMSentiment
 model_structure = args.model
 header(model_name .. ' for Sentiment Classification')
 
@@ -42,33 +31,25 @@ header(model_name .. ' for Sentiment Classification')
 local fine_grained = not args.binary
 
 -- directory containing dataset files
-local data_dir = 'data/sst/'
+local data_dir = 'data/'
 
 -- load vocab
-local vocab = treelstm.Vocab(data_dir .. 'vocab-cased.txt')
+local ast_vocab = treelstm.Vocab(data_dir .. 'vocab30000.ast')
+local nl_vocab = treelstm.Vocab(data_dir .. 'vocab20000.nl')
 
--- load embeddings
-print('loading word embeddings')
-local emb_dir = 'data/glove/'
-local emb_prefix = emb_dir .. 'glove.840B'
-local emb_vocab, emb_vecs = treelstm.read_embedding(emb_prefix .. '.vocab', emb_prefix .. '.300d.th')
-local emb_dim = emb_vecs:size(2)
 
 -- use only vectors in vocabulary (not necessary, but gives faster training)
-local num_unk = 0
-local vecs = torch.Tensor(vocab.size, emb_dim)
-for i = 1, vocab.size do
-  local w = string.gsub(vocab:token(i), '\\', '') -- remove escape characters
-  if emb_vocab:contains(w) then
-    vecs[i] = emb_vecs[emb_vocab:index(w)]
-  else
-    num_unk = num_unk + 1
-    vecs[i]:uniform(-0.05, 0.05)
+local ast_vecs = torch.Tensor(30000, emb_dim)
+for i = 1, 30000 do
+    ast_vecs[i]:uniform(-0.05, 0.05)
   end
 end
-print('unk count = ' .. num_unk)
-emb_vocab = nil
-emb_vecs = nil
+
+local nl_vecs = torch.Tensor(20000, emb_dim)
+for i = 1, 20000 do
+    nl_vecs[i]:uniform(-0.05, 0.05)
+  end
+end
 collectgarbage()
 
 -- load datasets
@@ -77,9 +58,9 @@ local train_dir = data_dir .. 'train/'
 local dev_dir = data_dir .. 'dev/'
 local test_dir = data_dir .. 'test/'
 local dependency = (args.model == 'dependency')
-local train_dataset = treelstm.read_sentiment_dataset(train_dir, vocab, fine_grained, dependency)
-local dev_dataset = treelstm.read_sentiment_dataset(dev_dir, vocab, fine_grained, dependency)
-local test_dataset = treelstm.read_sentiment_dataset(test_dir, vocab, fine_grained, dependency)
+local train_dataset = treelstm.read_dataset(train_dir, vocab, fine_grained, dependency)
+local dev_dataset = treelstm.read_dataset(dev_dir, vocab, fine_grained, dependency)
+local test_dataset = treelstm.read_dataset(test_dir, vocab, fine_grained, dependency)
 
 printf('num train = %d\n', train_dataset.size)
 printf('num dev   = %d\n', dev_dataset.size)
@@ -87,7 +68,8 @@ printf('num test  = %d\n', test_dataset.size)
 
 -- initialize model
 local model = model_class{
-  emb_vecs = vecs,
+  ast_vecs = ast_vecs,
+  nl_vecs = nl_vecs
   structure = model_structure,
   fine_grained = fine_grained,
   num_layers = args.layers,
@@ -127,7 +109,8 @@ for i = 1, num_epochs do
   if dev_score > best_dev_score then
     best_dev_score = dev_score
     best_dev_model = model_class{
-      emb_vecs = vecs,
+      ast_vecs = ast_vecs,
+      nl_vecs = nl_vecs,
       structure = model_structure,
       fine_grained = fine_grained,
       num_layers = args.layers,

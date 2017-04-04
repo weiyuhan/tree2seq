@@ -16,10 +16,14 @@ function TreeLSTMSentiment:__init(config)
   self.fine_grained      = (config.fine_grained == nil) and true or config.fine_grained
   self.dropout           = (config.dropout == nil) and true or config.dropout
 
-  -- word embedding
-  self.emb_dim = config.emb_vecs:size(2)
-  self.emb = nn.LookupTable(config.emb_vecs:size(1), self.emb_dim)
-  self.emb.weight:copy(config.emb_vecs)
+  -- word embedding for ast
+  self.emb_dim = config.emb_dim
+  self.ast_emb = nn.LookupTable(config.ast_vecs:size(1), self.emb_dim)
+  self.ast_emb.weight:copy(config.emb_vecs)
+
+  -- word embedding for nl
+  self.nl_emb = nn.LookupTable(config.nl_vecs:size(1), self.emb_dim)
+  self.nl_emb.weight:copy(config.nl_vecs)
 
   self.in_zeros = torch.zeros(self.emb_dim)
   self.num_classes = self.fine_grained and 5 or 3
@@ -33,17 +37,10 @@ function TreeLSTMSentiment:__init(config)
   local treelstm_config = {
     in_dim  = self.emb_dim,
     mem_dim = self.mem_dim,
-    output_module_fn = function() return self:new_sentiment_module() end,
     criterion = self.criterion,
   }
 
-  if self.structure == 'dependency' then
-    self.treelstm = treelstm.ChildSumTreeLSTM(treelstm_config)
-  elseif self.structure == 'constituency' then
-    self.treelstm = treelstm.BinaryTreeLSTM(treelstm_config)
-  else
-    error('invalid parse tree type: ' .. self.structure)
-  end
+  self.treelstm = treelstm.ChildSumTreeLSTM(treelstm_config)
 
   self.params, self.grad_params = self.treelstm:getParameters()
 end
